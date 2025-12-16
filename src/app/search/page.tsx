@@ -1,8 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { searchProducts } from '@/app/actions'; 
-import { ProductCard } from '@/components/products/ProductCard'; // [NEW] Use the shared card
+import { ProductCard } from '@/components/products/ProductCard';
 import { 
   Search, Camera, Image as ImageIcon, SlidersHorizontal, 
   X, Star, Grid, List, HelpCircle, QrCode, RefreshCcw, 
@@ -24,33 +23,44 @@ export default function SearchPage() {
   const [activeTab, setActiveTab] = useState('price'); 
   const [priceRange, setPriceRange] = useState([0, 2000]);
   const [minRating, setMinRating] = useState<number | null>(null);
-  const [layout, setLayout] = useState<'grid' | 'list'>('grid'); // Typed for component
+  const [layout, setLayout] = useState<'grid' | 'list'>('grid');
 
-  // Camera States
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync Query
   useEffect(() => { setQuery(searchParams.get('q') || ''); }, [searchParams]);
 
-  // Fetch Data
+  // Fetch Data — now uses API route instead of server import
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true);
       try {
         let sortParam = activeSort === 'Price' ? 'Price Low-High' : activeSort;
-        const data = await searchProducts({ query, minPrice: priceRange[0], maxPrice: priceRange[1], sort: sortParam });
+
+        const params = new URLSearchParams();
+        if (query) params.set('q', query);
+        params.set('minPrice', String(priceRange[0]));
+        params.set('maxPrice', String(priceRange[1]));
+        if (sortParam) params.set('sort', sortParam);
+
+        const res = await fetch(`/api/search?${params.toString()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Search API responded with ${res.status}`);
+        const data = await res.json();
+
         setProducts(minRating ? data.filter((p: any) => p.rating >= minRating) : data);
-      } catch (error) { console.error(error); } 
-      finally { setIsLoading(false); }
+      } catch (error) { 
+        console.error(error); 
+      } finally { 
+        setIsLoading(false); 
+      }
     }
     const t = setTimeout(fetchData, 500);
     return () => clearTimeout(t);
   }, [query, priceRange, minRating, activeSort]);
 
-  // --- CAMERA HANDLERS (Simplified for brevity) ---
+  // --- CAMERA HANDLERS (Simplified) ---
   const startCamera = async () => { /* ... same as before ... */ };
   const stopCamera = () => { /* ... same as before ... */ };
   const toggleImageSearch = () => { setIsImageSearchOpen(!isImageSearchOpen); };
@@ -93,10 +103,8 @@ export default function SearchPage() {
             {products.length === 0 ? (
                 <div className="text-center py-32 text-gray-400">No products found.</div>
             ) : (
-                // Responsive Grid: 1 col mobile, 2 col sm, 3 col md, 4 col lg
                 <div className={`grid gap-4 ${layout === 'grid' ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1'}`}>
                   {products.map((product) => (
-                    // [UPDATED] Using the reusable card
                     <ProductCard key={product.id} product={product} layout={layout} />
                   ))}
                 </div>
@@ -110,7 +118,6 @@ export default function SearchPage() {
          <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={() => setIsFilterOpen(false)}>
             <div className="bg-white w-full max-w-md p-6 rounded-t-2xl sm:rounded-2xl" onClick={e => e.stopPropagation()}>
                <div className="flex justify-between mb-4"><h2 className="font-bold">Filters</h2><button onClick={() => setIsFilterOpen(false)}><X/></button></div>
-               {/* Simplified Filter Content */}
                <div className="space-y-4">
                   <div><p className="text-sm font-bold mb-2">Price Range</p><div className="flex gap-2"><input type="number" className="border p-2 w-1/2 rounded" value={priceRange[0]} onChange={e => setPriceRange([+e.target.value, priceRange[1]])} /><input type="number" className="border p-2 w-1/2 rounded" value={priceRange[1]} onChange={e => setPriceRange([priceRange[0], +e.target.value])} /></div></div>
                   <button onClick={() => setIsFilterOpen(false)} className="w-full bg-black text-white py-3 rounded-lg font-bold">Apply</button>
